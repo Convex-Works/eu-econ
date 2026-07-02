@@ -19,19 +19,18 @@ WORKBOOK = ROOT / "Enerdata_Odyssee_260702_122358.xlsx"
 FIGURES = ROOT / "figures"
 GISCO_URL = "https://gisco-services.ec.europa.eu/distribution/v2/countries/geojson/CNTR_RG_10M_2024_3035.geojson"
 SOURCE_LABEL = "ODYSSEE/Enerdata export, 2026-07-02"
-MAP_EXTENT = (1_750_000, 6_720_000, 1_320_000, 5_620_000)
+MAP_EXTENT = (2_280_000, 6_800_000, 1_330_000, 5_420_000)
 
-INK = "#14161a"
-MUTED = "#69707a"
-GRID = "#e8e3db"
-PAPER = "#fbfaf7"
-LAND = "#eef0f1"
+INK = "#111111"
+MUTED = "#666666"
+GRID = "#e4e4e4"
+PAPER = "#ffffff"
+LAND = "#f0f0f0"
 BORDER = "#ffffff"
-START = "#aeb7c0"
-END = "#075a78"
-GAIN = "#0f7b83"
-DROP = "#d9684a"
-FLAT = "#c8ced4"
+START = "#ffffff"
+START_EDGE = "#9a9a9a"
+END = "#111111"
+CONNECTOR = "#b8b8b8"
 
 COUNTRY_CODES = {
     "Austria": "AT",
@@ -65,7 +64,7 @@ COUNTRY_CODES = {
 
 MAP_BINS = [-0.1, 1, 50, 150, 400, 800, np.inf]
 MAP_LABELS = ["0", "1–50", "50–150", "150–400", "400–800", "800+"]
-MAP_COLORS = ["#e8f4f8", "#c7e4ef", "#8dc9df", "#46a1c4", "#0878a8", "#03486f"]
+MAP_COLORS = ["#e8e8e8", "#d4d4d4", "#b5b5b5", "#858585", "#4d4d4d", "#111111"]
 
 # %%
 def apply_theme() -> None:
@@ -144,11 +143,7 @@ def save_figure(fig: plt.Figure, stem: str) -> None:
 
 # %%
 def change_color(value: float) -> str:
-    if value > 0.5:
-        return GAIN
-    if value < -0.5:
-        return DROP
-    return FLAT
+    return CONNECTOR
 
 
 def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, unit: str) -> None:
@@ -162,10 +157,10 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, uni
     ax = fig.add_axes([0.17, 0.12, 0.78, 0.74])
 
     for position, row in enumerate(data.itertuples(index=False)):
-        ax.hlines(position, row.start, row.end, color=change_color(row.change), linewidth=3.2, alpha=0.82, zorder=1)
+        ax.hlines(position, row.start, row.end, color=change_color(row.change), linewidth=1.55, alpha=1.0, zorder=1)
 
-    ax.scatter(data["start"], y, s=58, color=START, edgecolor=PAPER, linewidth=1.5, zorder=3)
-    ax.scatter(data["end"], y, s=76, color=END, edgecolor=PAPER, linewidth=1.5, zorder=4)
+    ax.scatter(data["start"], y, s=56, color=START, edgecolor=START_EDGE, linewidth=1.35, zorder=3)
+    ax.scatter(data["end"], y, s=66, color=END, edgecolor=PAPER, linewidth=1.25, zorder=4)
 
     for position, row in enumerate(data.itertuples(index=False)):
         label = f"{value_label(row.end)} ({change_label(row.change)})"
@@ -177,7 +172,7 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, uni
     ax.invert_yaxis()
     ax.set_xlabel(unit, fontsize=11.5, labelpad=10)
     ax.xaxis.set_major_formatter(FuncFormatter(kwh_formatter))
-    ax.grid(axis="x", color=GRID, linewidth=1.05)
+    ax.grid(axis="x", color=GRID, linewidth=0.85)
     ax.set_axisbelow(True)
     ax.spines[["top", "right", "left"]].set_visible(False)
     ax.spines["bottom"].set_color("#d8d2c8")
@@ -187,14 +182,14 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, uni
     ax.set_xlim(-max_value * 0.01, max_value * 1.22)
 
     handles = [
-        Line2D([0], [0], marker="o", color="none", markerfacecolor=START, markeredgecolor=PAPER, markersize=8, label=str(start_year)),
-        Line2D([0], [0], marker="o", color="none", markerfacecolor=END, markeredgecolor=PAPER, markersize=9, label=str(end_year)),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=START, markeredgecolor=START_EDGE, markersize=8, label=str(start_year)),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=END, markeredgecolor=PAPER, markersize=8.5, label=str(end_year)),
     ]
     ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=10.5, borderpad=0.2, labelspacing=0.7)
 
     fig.text(0.04, 0.965, "Air-cooling electricity per dwelling", ha="left", va="top", fontsize=26, weight="bold", color=INK)
     fig.text(0.04, 0.922, f"{start_year} → {end_year} · {unit}", ha="left", va="top", fontsize=13.5, color=MUTED)
-    fig.text(0.04, 0.035, f"Labels show {end_year} value and Δ since {start_year}. Complete {start_year}–{end_year} histories only. Source: {SOURCE_LABEL}.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
+    fig.text(0.04, 0.035, f"Complete {start_year}–{end_year} histories only · Source: {SOURCE_LABEL}.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
 
     save_figure(fig, "air_cooling_change_dumbbell")
 
@@ -210,7 +205,7 @@ def read_gisco() -> gpd.GeoDataFrame:
 
 
 def legend_row(fig: plt.Figure, unit: str, year: int) -> None:
-    ax = fig.add_axes([0.18, 0.075, 0.64, 0.06])
+    ax = fig.add_axes([0.10, 0.075, 0.82, 0.06])
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
@@ -235,8 +230,8 @@ def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
     data["bucket"] = data["value"].map(map_bucket)
     data["color"] = data["bucket"].map(dict(zip(MAP_LABELS, MAP_COLORS)))
 
-    fig = plt.figure(figsize=(11.4, 9.4))
-    ax = fig.add_axes([0.04, 0.15, 0.92, 0.70])
+    fig = plt.figure(figsize=(9.8, 9.6))
+    ax = fig.add_axes([0.11, 0.18, 0.78, 0.72])
 
     world.plot(ax=ax, color=LAND, edgecolor=BORDER, linewidth=0.34)
     data.plot(ax=ax, color=data["color"], edgecolor=BORDER, linewidth=0.72)
