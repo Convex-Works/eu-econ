@@ -15,9 +15,11 @@ from matplotlib.ticker import FuncFormatter
 # %%
 ROOT = Path(__file__).resolve().parents[1]
 WORKBOOK = ROOT / "Enerdata_Odyssee_260702_122358.xlsx"
+DEGREE_DAYS_WORKBOOK = ROOT / "Enerdata_Odyssee_260702_130403.xlsx"
 FIGURES = ROOT / "figures"
 GISCO_URL = "https://gisco-services.ec.europa.eu/distribution/v2/countries/geojson/CNTR_RG_10M_2024_3035.geojson"
 SOURCE_LABEL = "ODYSSEE/Enerdata export, 2026-07-02"
+SVG_METADATA = {"Date": "2026-07-02"}
 MAP_EXTENT = (2_420_000, 6_780_000, 1_420_000, 5_360_000)
 
 INK = "#111111"
@@ -30,6 +32,7 @@ START = "#ffffff"
 START_EDGE = "#9a9a9a"
 END = "#111111"
 CONNECTOR = "#b8b8b8"
+BAND = "#e8e8e8"
 
 COUNTRY_CODES = {
     "Austria": "AT",
@@ -100,6 +103,7 @@ def apply_theme() -> None:
             "ytick.color": INK,
             "text.color": INK,
             "svg.fonttype": "none",
+            "svg.hashsalt": "convex-eu-econ",
             "pdf.fonttype": 42,
             "ps.fonttype": 42,
         }
@@ -138,6 +142,21 @@ def latest_snapshot(frame: pd.DataFrame, year: int) -> pd.DataFrame:
         raise ValueError(f"Missing GISCO country codes: {missing_codes}")
     return data
 
+
+def matched_degree_days(
+    degree_frame: pd.DataFrame,
+    degree_years: list[int],
+    electricity_frame: pd.DataFrame,
+    electricity_year: int,
+) -> pd.DataFrame:
+    countries = set(electricity_frame.loc[electricity_frame[electricity_year].notna(), "country"])
+    data = degree_frame.loc[
+        degree_frame["country"].isin(countries)
+        & degree_frame[degree_years].notna().all(axis=1)
+        & degree_frame[degree_years[0]].gt(0)
+    ].copy()
+    return data.sort_values(degree_years[-1], ascending=False)
+
 # %%
 def kwh_formatter(value: float, position: int) -> str:
     if value >= 1000:
@@ -153,10 +172,16 @@ def change_label(value: float) -> str:
     return f"{value:+,.0f}"
 
 
+def clean_svg(path: Path) -> None:
+    path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines()) + "\n")
+
+
 def save_figure(fig: plt.Figure, stem: str) -> None:
     FIGURES.mkdir(exist_ok=True)
+    svg_path = FIGURES / f"{stem}.svg"
     fig.savefig(FIGURES / f"{stem}.png", dpi=300, bbox_inches="tight")
-    fig.savefig(FIGURES / f"{stem}.svg", bbox_inches="tight")
+    fig.savefig(svg_path, bbox_inches="tight", metadata=SVG_METADATA)
+    clean_svg(svg_path)
     plt.close(fig)
 
 # %%
@@ -265,18 +290,109 @@ def plot_map(frame: pd.DataFrame, year: int, unit: str) -> int:
     return len(missing_geometry)
 
 # %%
+def plot_degree_day_trend(
+    degree_frame: pd.DataFrame,
+    degree_years: list[int],
+    electricity_frame: pd.DataFrame,
+    electricity_year: int,
+) -> int:
+    data = matched_degree_days(degree_frame, degree_years, electricity_frame, electricity_year)
+    values = data.set_index("country")[degree_years].astype(float)
+    indexed = values.div(values[degree_years[0]], axis=0) * 100
+    median = indexed.median(axis=0)
+    lower = indexed.quantile(0.25, axis=0)
+    upper = indexed.quantile(0.75, axis=0)
+    years = np.array(degree_years)
+    end_value = median.iloc[-1]
+    change = end_value - median.iloc[0]
+
+    fig = plt.figure(figsize=(11.8, 7.2))
+    ax = fig.add_axes([0.09, 0.18, 0.86, 0.64])
+
+    ax.fill_between(years, lower.to_numpy(), upper.to_numpy(), color=BAND, alpha=1.0, linewidth=0, zorder=2)
+    ax.plot(years, median.to_numpy(), color=INK, linewidth=3.0, zorder=4)
+    ax.scatter(
+        [years[0], years[-1]],
+        [median.iloc[0], end_value],
+        s=[58, 74],
+        color=INK,
+        edgecolor=PAPER,
+        linewidth=1.2,
+        zorder=5,
+    )
+    ax.axhline(100, color=GRID, linewidth=1.0, zorder=0)
+
+    ax.text(
+        years[-1] + 0.22,
+        end_value,
+        f"{end_value:.0f} ({change_label(change)}%)",
+        ha="left",
+        va="center",
+        fontsize=10.5,
+        color=INK,
+        weight="bold",
+    )
+    ax.text(years[0] - 0.22, median.iloc[0], "100", ha="right", va="center", fontsize=10.2, color=MUTED)
+
+    handles = [
+        Line2D([0], [0], color=INK, linewidth=3.0, label="Median"),
+        Rectangle((0, 0), 1, 1, facecolor=BAND, edgecolor="none", label="Middle 50%"),
+    ]
+    ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=10.5, borderpad=0.2, labelspacing=0.7)
+
+    ax.set_xlim(years[0] - 0.6, years[-1] + 1.4)
+    ax.set_ylim(0, max(260, upper.max() * 1.22))
+    ax.set_ylabel("Index, 2010 = 100", fontsize=11.5, labelpad=10)
+    ax.set_xticks([years[0], *years[3::3], years[-1]])
+    ax.set_yticks(np.arange(0, ax.get_ylim()[1] + 1, 50))
+    ax.grid(axis="y", color=GRID, linewidth=0.85)
+    ax.set_axisbelow(True)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    ax.spines["bottom"].set_color("#d8d2c8")
+    ax.spines["bottom"].set_linewidth(1.2)
+    ax.tick_params(axis="x", labelsize=10.5, pad=6)
+    ax.tick_params(axis="y", labelsize=10.5, length=0, pad=6)
+
+    fig.text(0.04, 0.955, "Cooling degree-days are rising", ha="left", va="top", fontsize=26, weight="bold", color=INK)
+    fig.text(
+        0.04,
+        0.902,
+        f"Countries with air-cooling electricity data · {degree_years[0]}–{degree_years[-1]}",
+        ha="left",
+        va="top",
+        fontsize=13.5,
+        color=MUTED,
+    )
+    fig.text(
+        0.04,
+        0.045,
+        f"Cooling degree-days indexed within each country to {degree_years[0]} = 100; complete histories for {len(data)} countries · Source: {SOURCE_LABEL}.",
+        ha="left",
+        va="bottom",
+        fontsize=9.3,
+        color=MUTED,
+    )
+
+    save_figure(fig, "cooling_degree_days_trend")
+    return len(data)
+
+
+# %%
 def main() -> None:
     frame, years, unit = read_workbook(WORKBOOK)
+    degree_frame, degree_years, _ = read_workbook(DEGREE_DAYS_WORKBOOK)
     graph_count = int((frame[years].notna().all(axis=1) & frame[years[-1]].gt(0)).sum())
     map_count = int(frame[years[-1]].notna().sum())
 
     plot_dumbbell_change(frame, years, unit)
     map_unmatched = plot_map(frame, years[-1], unit)
+    degree_day_count = plot_degree_day_trend(degree_frame, degree_years, frame, years[-1])
 
     print(f"years={years[0]}-{years[-1]}")
     print(f"graph_countries={graph_count}")
     print(f"map_countries={map_count}")
     print(f"map_unmatched={map_unmatched}")
+    print(f"degree_day_countries={degree_day_count}")
     print(f"figures={FIGURES}")
 
 

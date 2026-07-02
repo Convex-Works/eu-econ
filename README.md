@@ -17,14 +17,18 @@ python scripts/build_figures.py
 - `figures/air_cooling_change_dumbbell.svg`
 - `figures/air_cooling_2024_map.png`
 - `figures/air_cooling_2024_map.svg`
+- `figures/cooling_degree_days_trend.png`
+- `figures/cooling_degree_days_trend.svg`
 
 ## Method
 
-The source workbook is `Enerdata_Odyssee_260702_122358.xlsx`. Values marked `n.a.` are treated as missing and numeric zeroes are kept.
+The air-cooling electricity source workbook is `Enerdata_Odyssee_260702_122358.xlsx`. The cooling-degree-day source workbook is `Enerdata_Odyssee_260702_130403.xlsx`. Values marked `n.a.` are treated as missing and numeric zeroes are kept.
 
 The dumbbell plot uses countries with complete annual data from 2010 through 2024 and nonzero 2024 values. Each row shows the 2010 value, the 2024 value, and the absolute change, sorted by the 2024 value.
 
 The map uses every country with a numeric 2024 value in the workbook. Country boundaries are Eurostat GISCO 2024 regions in EPSG:3035.
+
+The cooling-degree-day trend uses countries with numeric 2024 air-cooling electricity data and complete 2010–2024 cooling-degree-day histories. Each country is indexed to 2010 = 100, then the chart shows the median and middle 50% of countries.
 
 ## Sources
 
