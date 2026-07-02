@@ -1,4 +1,4 @@
-# EU Air-Cooling Opportunity Figures
+# EU Air-Cooling Electricity Figures
 
 Clean figures from the ODYSSEE/Enerdata export on electricity unit consumption per dwelling for air cooling.
 
@@ -13,8 +13,8 @@ python scripts/build_figures.py
 
 ## Outputs
 
-- `figures/air_cooling_opportunity_segments.png`
-- `figures/air_cooling_opportunity_segments.svg`
+- `figures/air_cooling_change_dumbbell.png`
+- `figures/air_cooling_change_dumbbell.svg`
 - `figures/air_cooling_2024_map.png`
 - `figures/air_cooling_2024_map.svg`
 
@@ -22,17 +22,13 @@ python scripts/build_figures.py
 
 The source workbook is `Enerdata_Odyssee_260702_122358.xlsx`. Values marked `n.a.` are treated as missing and numeric zeroes are kept.
 
-The segment graph uses countries with complete annual data from 2010 through 2024. The map uses every country with a numeric 2024 value.
+The dumbbell plot uses countries with complete annual data from 2010 through 2024. Each row shows the 2010 value, the 2024 value, and the absolute change, sorted by the 2024 value.
 
-Segments are assigned from the complete-history dataset using 2024 consumption and 2010–2024 change:
-
-- Large current market: top quartile by 2024 kWh per dwelling
-- Fast riser: not large current market and top quartile by absolute increase
-- Emerging opportunity: above median by 2024 level or increase
-- Low signal: remaining countries
+The map uses every country with a numeric 2024 value in the workbook. Country boundaries are Eurostat GISCO 2024 regions in EPSG:3035.
 
 ## Sources
 
 - ODYSSEE database: https://www.indicators.odyssee-mure.eu/energy-efficiency-database.html
 - ODYSSEE air-conditioning per dwelling indicator: https://www.odyssee-mure.eu/publications/efficiency-by-sector/households/unit-consumption-air-conditioning.html
-- Natural Earth Admin 0 country boundaries: https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries-2/
+- Eurostat GISCO Countries 2024: https://gisco-services.ec.europa.eu/distribution/v1/countries-2024.html
+- EPSG:3035 ETRS89-LAEA Europe: https://epsg.io/3035
