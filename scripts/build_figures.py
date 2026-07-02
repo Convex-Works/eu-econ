@@ -109,16 +109,15 @@ def apply_theme() -> None:
 apply_theme()
 
 # %%
-def read_workbook(path: Path) -> tuple[pd.DataFrame, list[int], str, str]:
+def read_workbook(path: Path) -> tuple[pd.DataFrame, list[int], str]:
     frame = pd.read_excel(path, sheet_name="Odyssee_export")
     year_columns = [column for column in frame.columns if isinstance(column, int)]
     data = frame.loc[frame["Zone Name"].notna()].copy()
     data[year_columns] = data[year_columns].replace("n.a.", pd.NA).apply(pd.to_numeric, errors="coerce")
-    data = data.rename(columns={"Zone Name": "country", "Title": "metric", "Unit": "unit"})
+    data = data.rename(columns={"Zone Name": "country", "Unit": "unit"})
     data["country_code"] = data["country"].map(COUNTRY_CODES)
-    metric = data["metric"].dropna().iloc[0]
     unit = data["unit"].dropna().iloc[0]
-    return data, year_columns, metric, unit
+    return data, year_columns, unit
 
 
 def complete_history(frame: pd.DataFrame, years: list[int]) -> pd.DataFrame:
@@ -161,11 +160,7 @@ def save_figure(fig: plt.Figure, stem: str) -> None:
     plt.close(fig)
 
 # %%
-def change_color(value: float) -> str:
-    return CONNECTOR
-
-
-def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, unit: str) -> None:
+def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], unit: str) -> None:
     start_year = years[0]
     end_year = years[-1]
     data = complete_history(frame, years)
@@ -176,7 +171,7 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, uni
     ax = fig.add_axes([0.17, 0.12, 0.78, 0.74])
 
     for position, row in enumerate(data.itertuples(index=False)):
-        ax.hlines(position, row.start, row.end, color=change_color(row.change), linewidth=1.55, alpha=1.0, zorder=1)
+        ax.hlines(position, row.start, row.end, color=CONNECTOR, linewidth=1.55, alpha=1.0, zorder=1)
 
     ax.scatter(data["start"], y, s=56, color=START, edgecolor=START_EDGE, linewidth=1.35, zorder=3)
     ax.scatter(data["end"], y, s=66, color=END, edgecolor=PAPER, linewidth=1.25, zorder=4)
@@ -238,7 +233,7 @@ def map_note(fig: plt.Figure, unit: str, year: int) -> None:
     ax.text(0.0, 0.10, f"Source: {SOURCE_LABEL}; Eurostat GISCO boundaries, EPSG:3035.", ha="left", va="center", fontsize=9.3, color=MUTED)
 
 
-def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
+def plot_map(frame: pd.DataFrame, year: int, unit: str) -> int:
     snapshot = latest_snapshot(frame, year)
     world = read_gisco()
     missing_geometry = sorted(set(snapshot["country_code"]) - set(world["CNTR_ID"]))
@@ -271,12 +266,12 @@ def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
 
 # %%
 def main() -> None:
-    frame, years, metric, unit = read_workbook(WORKBOOK)
+    frame, years, unit = read_workbook(WORKBOOK)
     graph_count = int((frame[years].notna().all(axis=1) & frame[years[-1]].gt(0)).sum())
     map_count = int(frame[years[-1]].notna().sum())
 
-    plot_dumbbell_change(frame, years, metric, unit)
-    map_unmatched = plot_map(frame, years[-1], metric, unit)
+    plot_dumbbell_change(frame, years, unit)
+    map_unmatched = plot_map(frame, years[-1], unit)
 
     print(f"years={years[0]}-{years[-1]}")
     print(f"graph_countries={graph_count}")
