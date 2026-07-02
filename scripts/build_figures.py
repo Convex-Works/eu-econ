@@ -33,6 +33,28 @@ START_EDGE = "#9a9a9a"
 END = "#111111"
 CONNECTOR = "#b8b8b8"
 LABEL_LINE = "#d8d8d8"
+BASELINE = "#d8d2c8"
+
+CHART_SIZE = (11.8, 8.6)
+MAP_SIZE = (9.8, 9.8)
+TITLE_X = 0.055
+TITLE_Y = 0.94
+SUBTITLE_Y = 0.895
+NOTE_Y = 0.055
+TITLE_SIZE = 24
+SUBTITLE_SIZE = 13
+NOTE_SIZE = 9.3
+TICK_SIZE = 10.4
+LABEL_SIZE = 10.3
+AXIS_LABEL_SIZE = 11.2
+GRID_WIDTH = 0.85
+BASELINE_WIDTH = 1.15
+CONNECTOR_WIDTH = 1.45
+TREND_WIDTH = 2.85
+DUMBBELL_AX = [0.17, 0.17, 0.77, 0.66]
+TREND_AX = [0.10, 0.17, 0.74, 0.66]
+MAP_AX = [0.10, 0.19, 0.80, 0.68]
+MAP_NOTE_AX = [0.10, 0.065, 0.82, 0.095]
 
 REGION_ORDER = ["North", "West", "East", "South"]
 REGION_COLORS = {
@@ -236,11 +258,30 @@ def label_positions(values: pd.Series, gap: float, lower: float, upper: float) -
     return pd.Series(dict(positions))
 
 
+def add_header(fig: plt.Figure, title: str, subtitle: str) -> None:
+    fig.text(TITLE_X, TITLE_Y, title, ha="left", va="top", fontsize=TITLE_SIZE, weight="bold", color=INK)
+    fig.text(TITLE_X, SUBTITLE_Y, subtitle, ha="left", va="top", fontsize=SUBTITLE_SIZE, color=MUTED)
+
+
+def add_note(fig: plt.Figure, text: str) -> None:
+    fig.text(TITLE_X, NOTE_Y, text, ha="left", va="bottom", fontsize=NOTE_SIZE, color=MUTED)
+
+
+def style_axis(ax: plt.Axes, grid_axis: str) -> None:
+    ax.grid(axis=grid_axis, color=GRID, linewidth=GRID_WIDTH)
+    ax.set_axisbelow(True)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    ax.spines["bottom"].set_color(BASELINE)
+    ax.spines["bottom"].set_linewidth(BASELINE_WIDTH)
+    ax.tick_params(axis="x", labelsize=TICK_SIZE, pad=6)
+    ax.tick_params(axis="y", labelsize=TICK_SIZE, length=0, pad=6)
+
+
 def save_figure(fig: plt.Figure, stem: str) -> None:
     FIGURES.mkdir(exist_ok=True)
     svg_path = FIGURES / f"{stem}.svg"
-    fig.savefig(FIGURES / f"{stem}.png", dpi=300, bbox_inches="tight")
-    fig.savefig(svg_path, bbox_inches="tight", metadata=SVG_METADATA)
+    fig.savefig(FIGURES / f"{stem}.png", dpi=300)
+    fig.savefig(svg_path, metadata=SVG_METADATA)
     clean_svg(svg_path)
     plt.close(fig)
 
@@ -252,11 +293,11 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], unit: str) -> No
     y = np.arange(len(data))
     max_value = max(data["start"].max(), data["end"].max())
 
-    fig = plt.figure(figsize=(11.8, 9.8))
-    ax = fig.add_axes([0.17, 0.12, 0.78, 0.74])
+    fig = plt.figure(figsize=CHART_SIZE)
+    ax = fig.add_axes(DUMBBELL_AX)
 
     for position, row in enumerate(data.itertuples(index=False)):
-        ax.hlines(position, row.start, row.end, color=CONNECTOR, linewidth=1.55, alpha=1.0, zorder=1)
+        ax.hlines(position, row.start, row.end, color=CONNECTOR, linewidth=CONNECTOR_WIDTH, alpha=1.0, zorder=1)
 
     ax.scatter(data["start"], y, s=56, color=START, edgecolor=START_EDGE, linewidth=1.35, zorder=3)
     ax.scatter(data["end"], y, s=66, color=END, edgecolor=PAPER, linewidth=1.25, zorder=4)
@@ -264,20 +305,15 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], unit: str) -> No
     for position, row in enumerate(data.itertuples(index=False)):
         label = f"{value_label(row.end)} ({change_label(row.change)})"
         x = max(row.start, row.end) + max_value * 0.018
-        ax.text(x, position, label, va="center", ha="left", fontsize=9.8, color=INK)
+        ax.text(x, position, label, va="center", ha="left", fontsize=9.6, color=INK)
 
     ax.set_yticks(y)
-    ax.set_yticklabels(data["country"], fontsize=10.5)
+    ax.set_yticklabels(data["country"], fontsize=LABEL_SIZE)
     ax.invert_yaxis()
-    ax.set_xlabel(unit, fontsize=11.5, labelpad=10)
+    ax.set_xlabel(unit, fontsize=AXIS_LABEL_SIZE, labelpad=10)
     ax.xaxis.set_major_formatter(FuncFormatter(kwh_formatter))
-    ax.grid(axis="x", color=GRID, linewidth=0.85)
-    ax.set_axisbelow(True)
-    ax.spines[["top", "right", "left"]].set_visible(False)
-    ax.spines["bottom"].set_color("#d8d2c8")
-    ax.spines["bottom"].set_linewidth(1.2)
-    ax.tick_params(axis="x", labelsize=10.5, pad=6)
-    ax.tick_params(axis="y", length=0, pad=8)
+    style_axis(ax, "x")
+    ax.tick_params(axis="y", pad=8)
     ax.set_xlim(-max_value * 0.01, max_value * 1.22)
 
     handles = [
@@ -286,9 +322,8 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], unit: str) -> No
     ]
     ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=10.5, borderpad=0.2, labelspacing=0.7)
 
-    fig.text(0.04, 0.965, "Air-cooling electricity per dwelling", ha="left", va="top", fontsize=26, weight="bold", color=INK)
-    fig.text(0.04, 0.922, f"{start_year} → {end_year} · {unit}", ha="left", va="top", fontsize=13.5, color=MUTED)
-    fig.text(0.04, 0.035, f"Complete {start_year}–{end_year} histories with nonzero {end_year} values · Source: {SOURCE_LABEL}.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
+    add_header(fig, "Air-cooling electricity per dwelling", f"{start_year} → {end_year} · {unit}")
+    add_note(fig, f"Complete {start_year}–{end_year} histories with nonzero {end_year} values · Source: {SOURCE_LABEL}.")
 
     save_figure(fig, "air_cooling_change_dumbbell")
 
@@ -304,18 +339,18 @@ def read_gisco() -> gpd.GeoDataFrame:
 
 
 def map_note(fig: plt.Figure, unit: str, year: int) -> None:
-    ax = fig.add_axes([0.10, 0.055, 0.82, 0.105])
+    ax = fig.add_axes(MAP_NOTE_AX)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
-    ax.text(0.0, 0.82, f"{unit}, {year}", ha="left", va="center", fontsize=10.8, weight="semibold", color=INK)
+    ax.text(0.0, 0.82, f"{unit}, {year}", ha="left", va="center", fontsize=10.5, weight="semibold", color=INK)
     items = [(LAND, "No data"), *zip(MAP_COLORS, MAP_LABELS)]
     x = 0.0
     for color, label in items:
         ax.add_patch(Rectangle((x, 0.43), 0.035, 0.20, facecolor=color, edgecolor=BORDER, linewidth=0.8))
-        ax.text(x + 0.044, 0.53, label, ha="left", va="center", fontsize=9.5, color=INK)
+        ax.text(x + 0.044, 0.53, label, ha="left", va="center", fontsize=9.3, color=INK)
         x += 0.135 if label != "No data" else 0.17
-    ax.text(0.0, 0.10, f"Source: {SOURCE_LABEL}; Eurostat GISCO boundaries, EPSG:3035.", ha="left", va="center", fontsize=9.3, color=MUTED)
+    ax.text(0.0, 0.10, f"Source: {SOURCE_LABEL}; Eurostat GISCO boundaries, EPSG:3035.", ha="left", va="center", fontsize=NOTE_SIZE, color=MUTED)
 
 
 def plot_map(frame: pd.DataFrame, year: int, unit: str) -> int:
@@ -331,8 +366,8 @@ def plot_map(frame: pd.DataFrame, year: int, unit: str) -> int:
     data["bucket"] = data["value"].map(map_bucket)
     data["color"] = data["bucket"].map(dict(zip(MAP_LABELS, MAP_COLORS)))
 
-    fig = plt.figure(figsize=(9.8, 9.6))
-    ax = fig.add_axes([0.11, 0.18, 0.78, 0.72])
+    fig = plt.figure(figsize=MAP_SIZE)
+    ax = fig.add_axes(MAP_AX)
 
     context.plot(ax=ax, color=LAND, edgecolor=BORDER, linewidth=0.34)
     data.plot(ax=ax, color=data["color"], edgecolor=BORDER, linewidth=0.72)
@@ -343,8 +378,7 @@ def plot_map(frame: pd.DataFrame, year: int, unit: str) -> int:
     ax.axis("off")
 
     map_note(fig, unit, year)
-    fig.text(0.04, 0.965, "Air-cooling electricity per dwelling", ha="left", va="top", fontsize=26, weight="bold", color=INK)
-    fig.text(0.04, 0.922, f"{year} snapshot · {unit}", ha="left", va="top", fontsize=13.5, color=MUTED)
+    add_header(fig, "Air-cooling electricity per dwelling", f"{year} snapshot · {unit}")
 
     save_figure(fig, "air_cooling_2024_map")
     return len(missing_geometry)
@@ -362,54 +396,31 @@ def plot_degree_day_trend(
     latest = regional[degree_years[-1]]
     label_y = label_positions(latest, gap=y_max * 0.045, lower=0, upper=y_max * 0.95)
 
-    fig = plt.figure(figsize=(11.8, 7.2))
-    ax = fig.add_axes([0.09, 0.18, 0.75, 0.64])
+    fig = plt.figure(figsize=CHART_SIZE)
+    ax = fig.add_axes(TREND_AX)
 
     for region in regional.index:
         values = regional.loc[region].to_numpy()
         color = REGION_COLORS[region]
-        ax.plot(years, values, color=color, linewidth=3.0, alpha=1.0, zorder=3)
+        ax.plot(years, values, color=color, linewidth=TREND_WIDTH, alpha=1.0, zorder=3)
         ax.scatter(years[-1], values[-1], s=42, color=color, edgecolor=PAPER, linewidth=1.1, zorder=4)
 
     for region in regional.index:
         value = latest[region]
         y = label_y[region]
         color = REGION_COLORS[region]
-        ax.plot([years[-1] + 0.10, years[-1] + 0.42], [value, y], color=LABEL_LINE, linewidth=0.85, zorder=1)
-        ax.text(years[-1] + 0.50, y, region, ha="left", va="center", fontsize=10.8, color=color, weight="bold")
+        ax.plot([years[-1] + 0.08, years[-1] + 0.30], [value, y], color=LABEL_LINE, linewidth=0.8, zorder=1)
+        ax.text(years[-1] + 0.36, y, region, ha="left", va="center", fontsize=10.4, color=color, weight="bold")
 
-    ax.set_xlim(years[0] - 0.6, years[-1] + 1.9)
+    ax.set_xlim(years[0] - 0.6, years[-1] + 1.15)
     ax.set_ylim(0, y_max)
-    ax.set_ylabel("Annual cooling degree-days", fontsize=11.5, labelpad=10)
+    ax.set_ylabel("Annual cooling degree-days", fontsize=AXIS_LABEL_SIZE, labelpad=10)
     ax.set_xticks([years[0], *years[3::3], years[-1]])
     ax.set_yticks(np.arange(0, y_max + 1, 100))
-    ax.grid(axis="y", color=GRID, linewidth=0.85)
-    ax.set_axisbelow(True)
-    ax.spines[["top", "right", "left"]].set_visible(False)
-    ax.spines["bottom"].set_color("#d8d2c8")
-    ax.spines["bottom"].set_linewidth(1.2)
-    ax.tick_params(axis="x", labelsize=10.5, pad=6)
-    ax.tick_params(axis="y", labelsize=10.5, length=0, pad=6)
+    style_axis(ax, "y")
 
-    fig.text(0.04, 0.955, "Cooling-weather pressure is rising", ha="left", va="top", fontsize=26, weight="bold", color=INK)
-    fig.text(
-        0.04,
-        0.902,
-        f"Regional medians · annual cooling degree-days · {degree_years[0]}–{degree_years[-1]}",
-        ha="left",
-        va="top",
-        fontsize=13.5,
-        color=MUTED,
-    )
-    fig.text(
-        0.04,
-        0.045,
-        f"Cooling degree-days combine how many hot days there are and how far temperatures sit above the cooling threshold; {count} matched countries · Source: {SOURCE_LABEL}.",
-        ha="left",
-        va="bottom",
-        fontsize=9.3,
-        color=MUTED,
-    )
+    add_header(fig, "Cooling pressure is rising", f"Regional medians · annual cooling degree-days · {degree_years[0]}–{degree_years[-1]}")
+    add_note(fig, f"Cooling degree-days combine hot-day frequency and intensity; {count} matched countries · Source: {SOURCE_LABEL}.")
 
     save_figure(fig, "cooling_degree_days_trend")
     return count
