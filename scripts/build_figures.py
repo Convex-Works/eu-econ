@@ -5,7 +5,6 @@ from pathlib import Path
 
 import geopandas as gpd
 import matplotlib as mpl
-import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -19,7 +18,7 @@ WORKBOOK = ROOT / "Enerdata_Odyssee_260702_122358.xlsx"
 FIGURES = ROOT / "figures"
 GISCO_URL = "https://gisco-services.ec.europa.eu/distribution/v2/countries/geojson/CNTR_RG_10M_2024_3035.geojson"
 SOURCE_LABEL = "ODYSSEE/Enerdata export, 2026-07-02"
-MAP_EXTENT = (2_280_000, 6_800_000, 1_330_000, 5_420_000)
+MAP_EXTENT = (2_420_000, 6_780_000, 1_420_000, 5_360_000)
 
 INK = "#111111"
 MUTED = "#666666"
@@ -65,6 +64,26 @@ COUNTRY_CODES = {
 MAP_BINS = [-0.1, 1, 50, 150, 400, 800, np.inf]
 MAP_LABELS = ["0", "1–50", "50–150", "150–400", "400–800", "800+"]
 MAP_COLORS = ["#e8e8e8", "#d4d4d4", "#b5b5b5", "#858585", "#4d4d4d", "#111111"]
+MAP_CONTEXT_CODES = {
+    "AD",
+    "AL",
+    "BA",
+    "BY",
+    "CH",
+    "LI",
+    "MC",
+    "MD",
+    "ME",
+    "MK",
+    "NO",
+    "RS",
+    "SM",
+    "UA",
+    "UK",
+    "VA",
+    "XK",
+    *COUNTRY_CODES.values(),
+}
 
 # %%
 def apply_theme() -> None:
@@ -204,28 +223,30 @@ def read_gisco() -> gpd.GeoDataFrame:
     return gpd.read_file(GISCO_URL)
 
 
-def legend_row(fig: plt.Figure, unit: str, year: int) -> None:
-    ax = fig.add_axes([0.10, 0.075, 0.82, 0.06])
+def map_note(fig: plt.Figure, unit: str, year: int) -> None:
+    ax = fig.add_axes([0.10, 0.055, 0.82, 0.105])
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
-    ax.text(0.0, 0.68, f"{unit}, {year}", ha="left", va="center", fontsize=10.8, weight="semibold", color=INK)
+    ax.text(0.0, 0.82, f"{unit}, {year}", ha="left", va="center", fontsize=10.8, weight="semibold", color=INK)
     items = [(LAND, "No data"), *zip(MAP_COLORS, MAP_LABELS)]
     x = 0.0
     for color, label in items:
-        ax.add_patch(Rectangle((x, 0.18), 0.035, 0.22, facecolor=color, edgecolor=BORDER, linewidth=0.8))
-        ax.text(x + 0.044, 0.29, label, ha="left", va="center", fontsize=9.5, color=INK)
+        ax.add_patch(Rectangle((x, 0.43), 0.035, 0.20, facecolor=color, edgecolor=BORDER, linewidth=0.8))
+        ax.text(x + 0.044, 0.53, label, ha="left", va="center", fontsize=9.5, color=INK)
         x += 0.135 if label != "No data" else 0.17
+    ax.text(0.0, 0.10, f"Source: {SOURCE_LABEL}; Eurostat GISCO boundaries, EPSG:3035.", ha="left", va="center", fontsize=9.3, color=MUTED)
 
 
 def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
     snapshot = latest_snapshot(frame, year)
     world = read_gisco()
-    merged = world.merge(snapshot, left_on="CNTR_ID", right_on="country_code", how="left")
     missing_geometry = sorted(set(snapshot["country_code"]) - set(world["CNTR_ID"]))
     if missing_geometry:
         raise ValueError(f"Missing GISCO geometries: {missing_geometry}")
 
+    context = world.loc[world["CNTR_ID"].isin(MAP_CONTEXT_CODES | set(snapshot["country_code"]))].copy()
+    merged = context.merge(snapshot, left_on="CNTR_ID", right_on="country_code", how="left")
     data = merged.loc[merged["value"].notna()].copy()
     data["bucket"] = data["value"].map(map_bucket)
     data["color"] = data["bucket"].map(dict(zip(MAP_LABELS, MAP_COLORS)))
@@ -233,33 +254,17 @@ def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
     fig = plt.figure(figsize=(9.8, 9.6))
     ax = fig.add_axes([0.11, 0.18, 0.78, 0.72])
 
-    world.plot(ax=ax, color=LAND, edgecolor=BORDER, linewidth=0.34)
+    context.plot(ax=ax, color=LAND, edgecolor=BORDER, linewidth=0.34)
     data.plot(ax=ax, color=data["color"], edgecolor=BORDER, linewidth=0.72)
-
-    top = data.sort_values("value", ascending=False).head(5).copy()
-    points = top.geometry.representative_point()
-    label_offsets = {
-        "Cyprus": (-12_000, -52_000),
-        "Malta": (0, -92_000),
-        "Greece": (25_000, -34_000),
-        "Croatia": (40_000, 56_000),
-        "Italy": (-38_000, 22_000),
-    }
-
-    for row, point in zip(top.itertuples(index=False), points):
-        dx, dy = label_offsets.get(row.country, (0, 0))
-        text = ax.text(point.x + dx, point.y + dy, row.country, fontsize=9.2, ha="center", va="center", color=INK, weight="bold", zorder=5)
-        text.set_path_effects([path_effects.withStroke(linewidth=3.0, foreground=PAPER)])
 
     ax.set_xlim(MAP_EXTENT[0], MAP_EXTENT[1])
     ax.set_ylim(MAP_EXTENT[2], MAP_EXTENT[3])
     ax.set_aspect("equal")
     ax.axis("off")
 
-    legend_row(fig, unit, year)
+    map_note(fig, unit, year)
     fig.text(0.04, 0.965, "Air-cooling electricity per dwelling", ha="left", va="top", fontsize=26, weight="bold", color=INK)
     fig.text(0.04, 0.922, f"{year} snapshot · {unit}", ha="left", va="top", fontsize=13.5, color=MUTED)
-    fig.text(0.04, 0.035, f"Source: {SOURCE_LABEL}; Eurostat GISCO boundaries, EPSG:3035.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
 
     save_figure(fig, "air_cooling_2024_map")
     return len(missing_geometry)
