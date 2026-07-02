@@ -32,7 +32,45 @@ START = "#ffffff"
 START_EDGE = "#9a9a9a"
 END = "#111111"
 CONNECTOR = "#b8b8b8"
-BAND = "#e8e8e8"
+LABEL_LINE = "#d8d8d8"
+
+REGION_ORDER = ["North", "West", "East", "South"]
+REGION_COLORS = {
+    "North": "#b5b5b5",
+    "West": "#858585",
+    "East": "#4d4d4d",
+    "South": "#111111",
+}
+
+COUNTRY_REGIONS = {
+    "Austria": "West",
+    "Belgium": "West",
+    "Bulgaria": "East",
+    "Croatia": "South",
+    "Cyprus": "South",
+    "Czechia": "East",
+    "Denmark": "North",
+    "Estonia": "North",
+    "Finland": "North",
+    "France": "West",
+    "Germany": "West",
+    "Greece": "South",
+    "Hungary": "East",
+    "Ireland": "North",
+    "Italy": "South",
+    "Latvia": "North",
+    "Lithuania": "North",
+    "Luxembourg": "West",
+    "Malta": "South",
+    "Netherlands": "West",
+    "Poland": "East",
+    "Portugal": "South",
+    "Romania": "East",
+    "Slovakia": "East",
+    "Slovenia": "South",
+    "Spain": "South",
+    "Sweden": "North",
+}
 
 COUNTRY_CODES = {
     "Austria": "AT",
@@ -143,19 +181,21 @@ def latest_snapshot(frame: pd.DataFrame, year: int) -> pd.DataFrame:
     return data
 
 
-def matched_degree_days(
+def regional_degree_days(
     degree_frame: pd.DataFrame,
     degree_years: list[int],
     electricity_frame: pd.DataFrame,
     electricity_year: int,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, int]:
     countries = set(electricity_frame.loc[electricity_frame[electricity_year].notna(), "country"])
     data = degree_frame.loc[
         degree_frame["country"].isin(countries)
         & degree_frame[degree_years].notna().all(axis=1)
-        & degree_frame[degree_years[0]].gt(0)
+        & degree_frame["country"].isin(COUNTRY_REGIONS)
     ].copy()
-    return data.sort_values(degree_years[-1], ascending=False)
+    data["region"] = data["country"].map(COUNTRY_REGIONS)
+    regional = data.groupby("region")[degree_years].median().reindex(REGION_ORDER).dropna(how="all")
+    return regional, len(data)
 
 # %%
 def kwh_formatter(value: float, position: int) -> str:
@@ -174,6 +214,26 @@ def change_label(value: float) -> str:
 
 def clean_svg(path: Path) -> None:
     path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines()) + "\n")
+
+
+def label_positions(values: pd.Series, gap: float, lower: float, upper: float) -> pd.Series:
+    positions = []
+    current = lower - gap
+    for country, value in values.sort_values().items():
+        y = max(float(value), current + gap)
+        positions.append((country, y))
+        current = y
+    if positions and positions[-1][1] > upper:
+        shift = positions[-1][1] - upper
+        positions = [(country, y - shift) for country, y in positions]
+        adjusted = []
+        current = lower - gap
+        for country, y in positions:
+            y = max(y, current + gap)
+            adjusted.append((country, y))
+            current = y
+        positions = adjusted
+    return pd.Series(dict(positions))
 
 
 def save_figure(fig: plt.Figure, stem: str) -> None:
@@ -296,55 +356,33 @@ def plot_degree_day_trend(
     electricity_frame: pd.DataFrame,
     electricity_year: int,
 ) -> int:
-    data = matched_degree_days(degree_frame, degree_years, electricity_frame, electricity_year)
-    values = data.set_index("country")[degree_years].astype(float)
-    indexed = values.div(values[degree_years[0]], axis=0) * 100
-    median = indexed.median(axis=0)
-    lower = indexed.quantile(0.25, axis=0)
-    upper = indexed.quantile(0.75, axis=0)
+    regional, count = regional_degree_days(degree_frame, degree_years, electricity_frame, electricity_year)
     years = np.array(degree_years)
-    end_value = median.iloc[-1]
-    change = end_value - median.iloc[0]
+    y_max = np.ceil(regional.to_numpy().max() * 1.16 / 50) * 50
+    latest = regional[degree_years[-1]]
+    label_y = label_positions(latest, gap=y_max * 0.045, lower=0, upper=y_max * 0.95)
 
     fig = plt.figure(figsize=(11.8, 7.2))
-    ax = fig.add_axes([0.09, 0.18, 0.86, 0.64])
+    ax = fig.add_axes([0.09, 0.18, 0.75, 0.64])
 
-    ax.fill_between(years, lower.to_numpy(), upper.to_numpy(), color=BAND, alpha=1.0, linewidth=0, zorder=2)
-    ax.plot(years, median.to_numpy(), color=INK, linewidth=3.0, zorder=4)
-    ax.scatter(
-        [years[0], years[-1]],
-        [median.iloc[0], end_value],
-        s=[58, 74],
-        color=INK,
-        edgecolor=PAPER,
-        linewidth=1.2,
-        zorder=5,
-    )
-    ax.axhline(100, color=GRID, linewidth=1.0, zorder=0)
+    for region in regional.index:
+        values = regional.loc[region].to_numpy()
+        color = REGION_COLORS[region]
+        ax.plot(years, values, color=color, linewidth=3.0, alpha=1.0, zorder=3)
+        ax.scatter(years[-1], values[-1], s=42, color=color, edgecolor=PAPER, linewidth=1.1, zorder=4)
 
-    ax.text(
-        years[-1] + 0.22,
-        end_value,
-        f"{end_value:.0f} ({change_label(change)}%)",
-        ha="left",
-        va="center",
-        fontsize=10.5,
-        color=INK,
-        weight="bold",
-    )
-    ax.text(years[0] - 0.22, median.iloc[0], "100", ha="right", va="center", fontsize=10.2, color=MUTED)
+    for region in regional.index:
+        value = latest[region]
+        y = label_y[region]
+        color = REGION_COLORS[region]
+        ax.plot([years[-1] + 0.10, years[-1] + 0.42], [value, y], color=LABEL_LINE, linewidth=0.85, zorder=1)
+        ax.text(years[-1] + 0.50, y, region, ha="left", va="center", fontsize=10.8, color=color, weight="bold")
 
-    handles = [
-        Line2D([0], [0], color=INK, linewidth=3.0, label="Median"),
-        Rectangle((0, 0), 1, 1, facecolor=BAND, edgecolor="none", label="Middle 50%"),
-    ]
-    ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=10.5, borderpad=0.2, labelspacing=0.7)
-
-    ax.set_xlim(years[0] - 0.6, years[-1] + 1.4)
-    ax.set_ylim(0, max(260, upper.max() * 1.22))
-    ax.set_ylabel("Index, 2010 = 100", fontsize=11.5, labelpad=10)
+    ax.set_xlim(years[0] - 0.6, years[-1] + 1.9)
+    ax.set_ylim(0, y_max)
+    ax.set_ylabel("Annual cooling degree-days", fontsize=11.5, labelpad=10)
     ax.set_xticks([years[0], *years[3::3], years[-1]])
-    ax.set_yticks(np.arange(0, ax.get_ylim()[1] + 1, 50))
+    ax.set_yticks(np.arange(0, y_max + 1, 100))
     ax.grid(axis="y", color=GRID, linewidth=0.85)
     ax.set_axisbelow(True)
     ax.spines[["top", "right", "left"]].set_visible(False)
@@ -353,11 +391,11 @@ def plot_degree_day_trend(
     ax.tick_params(axis="x", labelsize=10.5, pad=6)
     ax.tick_params(axis="y", labelsize=10.5, length=0, pad=6)
 
-    fig.text(0.04, 0.955, "Cooling degree-days are rising", ha="left", va="top", fontsize=26, weight="bold", color=INK)
+    fig.text(0.04, 0.955, "Cooling-weather pressure is rising", ha="left", va="top", fontsize=26, weight="bold", color=INK)
     fig.text(
         0.04,
         0.902,
-        f"Countries with air-cooling electricity data · {degree_years[0]}–{degree_years[-1]}",
+        f"Regional medians · annual cooling degree-days · {degree_years[0]}–{degree_years[-1]}",
         ha="left",
         va="top",
         fontsize=13.5,
@@ -366,7 +404,7 @@ def plot_degree_day_trend(
     fig.text(
         0.04,
         0.045,
-        f"Cooling degree-days indexed within each country to {degree_years[0]} = 100; complete histories for {len(data)} countries · Source: {SOURCE_LABEL}.",
+        f"Cooling degree-days combine how many hot days there are and how far temperatures sit above the cooling threshold; {count} matched countries · Source: {SOURCE_LABEL}.",
         ha="left",
         va="bottom",
         fontsize=9.3,
@@ -374,7 +412,7 @@ def plot_degree_day_trend(
     )
 
     save_figure(fig, "cooling_degree_days_trend")
-    return len(data)
+    return count
 
 
 # %%

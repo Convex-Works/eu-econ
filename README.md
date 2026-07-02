@@ -28,7 +28,7 @@ The dumbbell plot uses countries with complete annual data from 2010 through 202
 
 The map uses every country with a numeric 2024 value in the workbook. Country boundaries are Eurostat GISCO 2024 regions in EPSG:3035.
 
-The cooling-degree-day trend uses countries with numeric 2024 air-cooling electricity data and complete 2010–2024 cooling-degree-day histories. Each country is indexed to 2010 = 100, then the chart shows the median and middle 50% of countries.
+The cooling-degree-day trend uses countries with numeric 2024 air-cooling electricity data and complete 2010–2024 cooling-degree-day histories. Countries are grouped into North, West, East, and South Europe, and each line shows the regional median annual cooling degree-days.
 
 ## Sources
 
