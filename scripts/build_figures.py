@@ -15,7 +15,8 @@ from matplotlib.ticker import FuncFormatter
 # %%
 ROOT = Path(__file__).resolve().parents[1]
 WORKBOOK = ROOT / "Enerdata_Odyssee_260702_122358.xlsx"
-DEGREE_DAYS_WORKBOOK = ROOT / "Enerdata_Odyssee_260702_130403.xlsx"
+BARRIER1_CSV = ROOT / "barrier1_tenant_landlord.csv"
+BARRIER3_CSV = ROOT / "barrier3_building_age.csv"
 FIGURES = ROOT / "figures"
 GISCO_URL = "https://gisco-services.ec.europa.eu/distribution/v2/countries/geojson/CNTR_RG_10M_2024_3035.geojson"
 SOURCE_LABEL = "ODYSSEE/Enerdata export, 2026-07-02"
@@ -32,8 +33,9 @@ START = "#ffffff"
 START_EDGE = "#9a9a9a"
 END = "#111111"
 CONNECTOR = "#b8b8b8"
-LABEL_LINE = "#d8d8d8"
 BASELINE = "#d8d2c8"
+TENURE_OWNER = "#111111"
+TENURE_RENTER = "#d8d8d8"
 
 CHART_SIZE = (11.8, 8.6)
 MAP_SIZE = (9.8, 9.8)
@@ -50,49 +52,20 @@ AXIS_LABEL_SIZE = 11.2
 GRID_WIDTH = 0.85
 BASELINE_WIDTH = 1.15
 CONNECTOR_WIDTH = 1.45
-TREND_WIDTH = 2.85
 DUMBBELL_AX = [0.17, 0.17, 0.77, 0.66]
-TREND_AX = [0.10, 0.17, 0.74, 0.66]
+BARRIER_BAR_AX = [0.18, 0.16, 0.72, 0.66]
+BARRIER_SPLIT_AX = [0.19, 0.17, 0.72, 0.64]
 MAP_AX = [0.10, 0.19, 0.80, 0.68]
 MAP_NOTE_AX = [0.10, 0.065, 0.82, 0.095]
 
-REGION_ORDER = ["North", "West", "East", "South"]
-REGION_COLORS = {
-    "North": "#b5b5b5",
-    "West": "#858585",
-    "East": "#4d4d4d",
-    "South": "#111111",
-}
-
-COUNTRY_REGIONS = {
-    "Austria": "West",
-    "Belgium": "West",
-    "Bulgaria": "East",
-    "Croatia": "South",
-    "Cyprus": "South",
-    "Czechia": "East",
-    "Denmark": "North",
-    "Estonia": "North",
-    "Finland": "North",
-    "France": "West",
-    "Germany": "West",
-    "Greece": "South",
-    "Hungary": "East",
-    "Ireland": "North",
-    "Italy": "South",
-    "Latvia": "North",
-    "Lithuania": "North",
-    "Luxembourg": "West",
-    "Malta": "South",
-    "Netherlands": "West",
-    "Poland": "East",
-    "Portugal": "South",
-    "Romania": "East",
-    "Slovakia": "East",
-    "Slovenia": "South",
-    "Spain": "South",
-    "Sweden": "North",
-}
+BARRIER_CONTEXT_COUNTRIES = {"Switzerland", "Denmark", "Sweden"}
+AGE_BUCKETS = [
+    ("before_1919", "Before 1919", "#111111"),
+    ("y1919_1945", "1919–1945", "#4d4d4d"),
+    ("y1946_1960", "1946–1960", "#858585"),
+    ("y1961_1980", "1961–1980", "#b5b5b5"),
+]
+AGE_NEW_COLOR = "#d8e4ec"
 
 COUNTRY_CODES = {
     "Austria": "AT",
@@ -184,6 +157,19 @@ def read_workbook(path: Path) -> tuple[pd.DataFrame, list[int], str]:
     return data, year_columns, unit
 
 
+def read_csv_data(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path, comment="#")
+
+
+def read_csv_source(path: Path) -> str:
+    line = path.read_text().splitlines()[0].removeprefix("# Source: ").strip()
+    if "ilc_lvho02" in line:
+        return "Eurostat ilc_lvho02"
+    if "cens_21dwop_r3" in line:
+        return "Eurostat cens_21dwop_r3, 2021 Population & Housing Census"
+    return line.split(". Filters:")[0]
+
+
 def complete_history(frame: pd.DataFrame, years: list[int]) -> pd.DataFrame:
     start_year = years[0]
     end_year = years[-1]
@@ -194,6 +180,10 @@ def complete_history(frame: pd.DataFrame, years: list[int]) -> pd.DataFrame:
     return data.loc[data["end"].gt(0)].sort_values("end", ascending=False)
 
 
+def barrier_country_set(frame: pd.DataFrame, years: list[int]) -> set[str]:
+    return set(complete_history(frame, years)["country"]) | BARRIER_CONTEXT_COUNTRIES
+
+
 def latest_snapshot(frame: pd.DataFrame, year: int) -> pd.DataFrame:
     data = frame.loc[frame[year].notna(), ["country", "country_code", year]].copy()
     data = data.rename(columns={year: "value"})
@@ -201,23 +191,6 @@ def latest_snapshot(frame: pd.DataFrame, year: int) -> pd.DataFrame:
     if missing_codes:
         raise ValueError(f"Missing GISCO country codes: {missing_codes}")
     return data
-
-
-def regional_degree_days(
-    degree_frame: pd.DataFrame,
-    degree_years: list[int],
-    electricity_frame: pd.DataFrame,
-    electricity_year: int,
-) -> tuple[pd.DataFrame, int]:
-    countries = set(electricity_frame.loc[electricity_frame[electricity_year].notna(), "country"])
-    data = degree_frame.loc[
-        degree_frame["country"].isin(countries)
-        & degree_frame[degree_years].notna().all(axis=1)
-        & degree_frame["country"].isin(COUNTRY_REGIONS)
-    ].copy()
-    data["region"] = data["country"].map(COUNTRY_REGIONS)
-    regional = data.groupby("region")[degree_years].median().reindex(REGION_ORDER).dropna(how="all")
-    return regional, len(data)
 
 # %%
 def kwh_formatter(value: float, position: int) -> str:
@@ -234,28 +207,16 @@ def change_label(value: float) -> str:
     return f"{value:+,.0f}"
 
 
+def percent_axis(value: float, position: int) -> str:
+    return f"{abs(value):.0f}%"
+
+
+def percent_label(value: float) -> str:
+    return f"{value:.1f}%"
+
+
 def clean_svg(path: Path) -> None:
     path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines()) + "\n")
-
-
-def label_positions(values: pd.Series, gap: float, lower: float, upper: float) -> pd.Series:
-    positions = []
-    current = lower - gap
-    for country, value in values.sort_values().items():
-        y = max(float(value), current + gap)
-        positions.append((country, y))
-        current = y
-    if positions and positions[-1][1] > upper:
-        shift = positions[-1][1] - upper
-        positions = [(country, y - shift) for country, y in positions]
-        adjusted = []
-        current = lower - gap
-        for country, y in positions:
-            y = max(y, current + gap)
-            adjusted.append((country, y))
-            current = y
-        positions = adjusted
-    return pd.Series(dict(positions))
 
 
 def add_header(fig: plt.Figure, title: str, subtitle: str) -> None:
@@ -384,64 +345,124 @@ def plot_map(frame: pd.DataFrame, year: int, unit: str) -> int:
     return len(missing_geometry)
 
 # %%
-def plot_degree_day_trend(
-    degree_frame: pd.DataFrame,
-    degree_years: list[int],
-    electricity_frame: pd.DataFrame,
-    electricity_year: int,
-) -> int:
-    regional, count = regional_degree_days(degree_frame, degree_years, electricity_frame, electricity_year)
-    years = np.array(degree_years)
-    y_max = np.ceil(regional.to_numpy().max() * 1.16 / 50) * 50
-    latest = regional[degree_years[-1]]
-    label_y = label_positions(latest, gap=y_max * 0.045, lower=0, upper=y_max * 0.95)
+def plot_barrier_owner_tenure(frame: pd.DataFrame, countries: set[str], source: str) -> int:
+    data = frame.loc[frame["country"].isin(countries)].copy()
+    missing = sorted(countries - set(data["country"]))
+    if missing:
+        raise ValueError(f"Missing barrier 1 countries: {missing}")
+    data["owner"] = 100 - data["pct_tenant_total"]
+    data["renter"] = data["pct_tenant_total"]
+    share_columns = ["renter", "owner"]
+    if data[share_columns].lt(-1e-9).any().any():
+        raise ValueError("Barrier 1 tenure shares include negative values")
+    if not np.allclose(data[share_columns].sum(axis=1), 100):
+        raise ValueError("Barrier 1 tenure shares do not sum to 100")
+    data = data.sort_values("owner", ascending=False)
 
     fig = plt.figure(figsize=CHART_SIZE)
-    ax = fig.add_axes(TREND_AX)
+    ax = fig.add_axes(BARRIER_BAR_AX)
+    y = np.arange(len(data))
 
-    for region in regional.index:
-        values = regional.loc[region].to_numpy()
-        color = REGION_COLORS[region]
-        ax.plot(years, values, color=color, linewidth=TREND_WIDTH, alpha=1.0, zorder=3)
-        ax.scatter(years[-1], values[-1], s=42, color=color, edgecolor=PAPER, linewidth=1.1, zorder=4)
+    ax.barh(y, data["owner"], color=TENURE_OWNER, height=0.66, edgecolor=PAPER, linewidth=0.8)
+    ax.barh(y, data["renter"], left=data["owner"], color=TENURE_RENTER, height=0.66, edgecolor=PAPER, linewidth=0.8)
 
-    for region in regional.index:
-        value = latest[region]
-        y = label_y[region]
-        color = REGION_COLORS[region]
-        ax.plot([years[-1] + 0.08, years[-1] + 0.30], [value, y], color=LABEL_LINE, linewidth=0.8, zorder=1)
-        ax.text(years[-1] + 0.36, y, region, ha="left", va="center", fontsize=10.4, color=color, weight="bold")
+    for position, value in enumerate(data["owner"]):
+        ax.text(value / 2, position, percent_label(value), ha="center", va="center", fontsize=9.4, color=PAPER, weight="semibold")
 
-    ax.set_xlim(years[0] - 0.6, years[-1] + 1.15)
-    ax.set_ylim(0, y_max)
-    ax.set_ylabel("Annual cooling degree-days", fontsize=AXIS_LABEL_SIZE, labelpad=10)
-    ax.set_xticks([years[0], *years[3::3], years[-1]])
-    ax.set_yticks(np.arange(0, y_max + 1, 100))
-    style_axis(ax, "y")
+    ax.set_yticks(y)
+    ax.set_yticklabels(data["country"], fontsize=LABEL_SIZE)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 100)
+    ax.set_xlabel("Share of population (%)", fontsize=AXIS_LABEL_SIZE, labelpad=10)
+    ax.xaxis.set_major_formatter(FuncFormatter(percent_axis))
+    style_axis(ax, "x")
+    ax.tick_params(axis="y", pad=8)
 
-    add_header(fig, "Cooling pressure is rising", f"Regional medians · annual cooling degree-days · {degree_years[0]}–{degree_years[-1]}")
-    add_note(fig, f"Cooling degree-days combine hot-day frequency and intensity; {count} matched countries · Source: {SOURCE_LABEL}.")
+    handles = [
+        Line2D([0], [0], color=TENURE_OWNER, linewidth=8, label="Owner"),
+        Line2D([0], [0], color=TENURE_RENTER, linewidth=8, label="Renter"),
+    ]
+    fig.legend(handles=handles, loc="upper right", bbox_to_anchor=(0.91, 0.872), frameon=False, ncol=2, fontsize=9.8, handlelength=1.6, columnspacing=1.0)
 
-    save_figure(fig, "cooling_degree_days_trend")
-    return count
+    add_header(fig, "Barrier 1: owner-occupied tenure", "Owner vs renter population share · latest Eurostat year · selected countries")
+    add_note(fig, f"Tenure split is population share; sorted by owner share · Source: {source}.")
+
+    save_figure(fig, "barrier1_owner_tenure")
+    return len(data)
+
+
+def plot_barrier_building_age(frame: pd.DataFrame, countries: set[str], source: str) -> int:
+    data = frame.loc[frame["country"].isin(countries)].copy()
+    missing = sorted(countries - set(data["country"]))
+    if missing:
+        raise ValueError(f"Missing barrier 3 countries: {missing}")
+    data["known"] = data["total_dwellings"] - data["unknown_year"]
+    data["post1980_sum"] = data["known"] - data["pre1980_sum"]
+    for column, _, _ in AGE_BUCKETS:
+        data[f"{column}_pct"] = data[column] / data["known"] * 100
+    data["pre1980_pct"] = data["pre1980_sum"] / data["known"] * 100
+    data["post1980_pct"] = data["post1980_sum"] / data["known"] * 100
+    data = data.sort_values("post1980_pct", ascending=False)
+
+    fig = plt.figure(figsize=CHART_SIZE)
+    ax = fig.add_axes(BARRIER_SPLIT_AX)
+    y = np.arange(len(data))
+    old_total = data["pre1980_pct"]
+    max_side = np.ceil(max(old_total.max(), data["post1980_pct"].max()) / 10) * 10 + 10
+
+    left = -old_total.to_numpy()
+    for column, label, color in AGE_BUCKETS:
+        values = data[f"{column}_pct"].to_numpy()
+        ax.barh(y, values, left=left, height=0.66, color=color, edgecolor=PAPER, linewidth=0.7, label=label)
+        left = left + values
+    ax.barh(y, data["post1980_pct"], left=0, height=0.66, color=AGE_NEW_COLOR, edgecolor=PAPER, linewidth=0.7, label="1981+")
+
+    for position, row in enumerate(data.itertuples(index=False)):
+        ax.text(-row.pre1980_pct - max_side * 0.025, position, f"{row.pre1980_pct:.0f}%", ha="right", va="center", fontsize=9.4, color=INK, weight="semibold")
+        ax.text(row.post1980_pct + max_side * 0.025, position, f"{row.post1980_pct:.0f}%", ha="left", va="center", fontsize=9.4, color=INK, weight="semibold")
+
+    ax.axvline(0, color=INK, linewidth=1.2)
+    ax.set_yticks(y)
+    ax.set_yticklabels(data["country"], fontsize=LABEL_SIZE)
+    ax.invert_yaxis()
+    ax.set_xlim(-max_side, max_side)
+    ax.set_xticks([])
+    ax.grid(False)
+    ax.set_axisbelow(True)
+    ax.spines[:].set_visible(False)
+    ax.tick_params(axis="x", length=0, labelbottom=False)
+    ax.tick_params(axis="y", length=0, pad=8)
+
+    fig.legend(loc="upper right", bbox_to_anchor=(0.91, 0.872), frameon=False, ncol=5, fontsize=9.2, handlelength=1.5, columnspacing=0.9)
+
+    add_header(fig, "Barrier 3: the 1980 building-stock split", "Conventional dwellings by construction period · 2021 Census · selected countries")
+    add_note(fig, f"Left: pre-1980; right: 1981+; sorted by 1981+ share; rows sum to 100% · Source: {source}.")
+
+    save_figure(fig, "barrier3_building_age_split")
+    return len(data)
 
 
 # %%
 def main() -> None:
     frame, years, unit = read_workbook(WORKBOOK)
-    degree_frame, degree_years, _ = read_workbook(DEGREE_DAYS_WORKBOOK)
+    barrier1_frame = read_csv_data(BARRIER1_CSV)
+    barrier3_frame = read_csv_data(BARRIER3_CSV)
+    barrier_countries = barrier_country_set(frame, years)
     graph_count = int((frame[years].notna().all(axis=1) & frame[years[-1]].gt(0)).sum())
     map_count = int(frame[years[-1]].notna().sum())
 
     plot_dumbbell_change(frame, years, unit)
     map_unmatched = plot_map(frame, years[-1], unit)
-    degree_day_count = plot_degree_day_trend(degree_frame, degree_years, frame, years[-1])
+    barrier1_count = plot_barrier_owner_tenure(barrier1_frame, barrier_countries, read_csv_source(BARRIER1_CSV))
+    barrier3_count = plot_barrier_building_age(barrier3_frame, barrier_countries, read_csv_source(BARRIER3_CSV))
 
     print(f"years={years[0]}-{years[-1]}")
     print(f"graph_countries={graph_count}")
     print(f"map_countries={map_count}")
     print(f"map_unmatched={map_unmatched}")
-    print(f"degree_day_countries={degree_day_count}")
+    print(f"barrier_country_set={len(barrier_countries)}")
+    print(f"barrier1_countries={barrier1_count}")
+    print(f"barrier3_countries={barrier3_count}")
     print(f"figures={FIGURES}")
 
 
