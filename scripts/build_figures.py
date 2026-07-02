@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
+from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter
 
 # %%
@@ -19,7 +19,19 @@ WORKBOOK = ROOT / "Enerdata_Odyssee_260702_122358.xlsx"
 FIGURES = ROOT / "figures"
 GISCO_URL = "https://gisco-services.ec.europa.eu/distribution/v2/countries/geojson/CNTR_RG_10M_2024_3035.geojson"
 SOURCE_LABEL = "ODYSSEE/Enerdata export, 2026-07-02"
-MAP_EXTENT = (2_150_000, 6_650_000, 1_300_000, 5_650_000)
+MAP_EXTENT = (1_750_000, 6_720_000, 1_320_000, 5_620_000)
+
+INK = "#14161a"
+MUTED = "#69707a"
+GRID = "#e8e3db"
+PAPER = "#fbfaf7"
+LAND = "#eef0f1"
+BORDER = "#ffffff"
+START = "#aeb7c0"
+END = "#075a78"
+GAIN = "#0f7b83"
+DROP = "#d9684a"
+FLAT = "#c8ced4"
 
 COUNTRY_CODES = {
     "Austria": "AT",
@@ -53,7 +65,30 @@ COUNTRY_CODES = {
 
 MAP_BINS = [-0.1, 1, 50, 150, 400, 800, np.inf]
 MAP_LABELS = ["0", "1–50", "50–150", "150–400", "400–800", "800+"]
-MAP_COLORS = [mpl.colormaps["Blues"](value) for value in np.linspace(0.18, 0.92, len(MAP_LABELS))]
+MAP_COLORS = ["#e8f4f8", "#c7e4ef", "#8dc9df", "#46a1c4", "#0878a8", "#03486f"]
+
+# %%
+def apply_theme() -> None:
+    mpl.rcParams.update(
+        {
+            "figure.facecolor": PAPER,
+            "axes.facecolor": PAPER,
+            "savefig.facecolor": PAPER,
+            "font.family": "sans-serif",
+            "font.sans-serif": ["Inter", "Helvetica Neue", "Arial", "DejaVu Sans"],
+            "axes.titleweight": "bold",
+            "axes.labelcolor": INK,
+            "xtick.color": INK,
+            "ytick.color": INK,
+            "text.color": INK,
+            "svg.fonttype": "none",
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
+
+
+apply_theme()
 
 # %%
 def read_workbook(path: Path) -> tuple[pd.DataFrame, list[int], str, str]:
@@ -103,11 +138,19 @@ def change_label(value: float) -> str:
 
 def save_figure(fig: plt.Figure, stem: str) -> None:
     FIGURES.mkdir(exist_ok=True)
-    fig.savefig(FIGURES / f"{stem}.png", dpi=240, bbox_inches="tight")
+    fig.savefig(FIGURES / f"{stem}.png", dpi=300, bbox_inches="tight")
     fig.savefig(FIGURES / f"{stem}.svg", bbox_inches="tight")
     plt.close(fig)
 
 # %%
+def change_color(value: float) -> str:
+    if value > 0.5:
+        return GAIN
+    if value < -0.5:
+        return DROP
+    return FLAT
+
+
 def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, unit: str) -> None:
     start_year = years[0]
     end_year = years[-1]
@@ -115,38 +158,43 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, uni
     y = np.arange(len(data))
     max_value = max(data["start"].max(), data["end"].max())
 
-    fig, ax = plt.subplots(figsize=(11.5, 9.5))
+    fig = plt.figure(figsize=(11.8, 9.8))
+    ax = fig.add_axes([0.17, 0.12, 0.78, 0.74])
 
-    ax.hlines(y, data["start"], data["end"], color="#c5ccd3", linewidth=2.4, zorder=1)
-    ax.scatter(data["start"], y, s=42, color="#a2a9b0", edgecolor="white", linewidth=0.8, zorder=3)
-    ax.scatter(data["end"], y, s=58, color="#1f5f85", edgecolor="white", linewidth=0.8, zorder=4)
+    for position, row in enumerate(data.itertuples(index=False)):
+        ax.hlines(position, row.start, row.end, color=change_color(row.change), linewidth=3.2, alpha=0.82, zorder=1)
+
+    ax.scatter(data["start"], y, s=58, color=START, edgecolor=PAPER, linewidth=1.5, zorder=3)
+    ax.scatter(data["end"], y, s=76, color=END, edgecolor=PAPER, linewidth=1.5, zorder=4)
 
     for position, row in enumerate(data.itertuples(index=False)):
         label = f"{value_label(row.end)} ({change_label(row.change)})"
-        x = max(row.start, row.end) + max_value * 0.016
-        ax.text(x, position, label, va="center", ha="left", fontsize=8.8, color="#202124")
+        x = max(row.start, row.end) + max_value * 0.018
+        ax.text(x, position, label, va="center", ha="left", fontsize=9.8, color=INK)
 
     ax.set_yticks(y)
-    ax.set_yticklabels(data["country"], fontsize=9.5)
+    ax.set_yticklabels(data["country"], fontsize=10.5)
     ax.invert_yaxis()
-    ax.set_xlabel(unit, fontsize=10)
+    ax.set_xlabel(unit, fontsize=11.5, labelpad=10)
     ax.xaxis.set_major_formatter(FuncFormatter(kwh_formatter))
-    ax.grid(axis="x", color="#e8eaed", linewidth=0.8)
+    ax.grid(axis="x", color=GRID, linewidth=1.05)
     ax.set_axisbelow(True)
     ax.spines[["top", "right", "left"]].set_visible(False)
-    ax.spines["bottom"].set_color("#dadce0")
-    ax.tick_params(axis="y", length=0)
-    ax.set_xlim(0, max_value * 1.18)
+    ax.spines["bottom"].set_color("#d8d2c8")
+    ax.spines["bottom"].set_linewidth(1.2)
+    ax.tick_params(axis="x", labelsize=10.5, pad=6)
+    ax.tick_params(axis="y", length=0, pad=8)
+    ax.set_xlim(-max_value * 0.01, max_value * 1.22)
 
     handles = [
-        Line2D([0], [0], marker="o", color="none", markerfacecolor="#a2a9b0", markeredgecolor="white", markersize=7, label=str(start_year)),
-        Line2D([0], [0], marker="o", color="none", markerfacecolor="#1f5f85", markeredgecolor="white", markersize=8, label=str(end_year)),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=START, markeredgecolor=PAPER, markersize=8, label=str(start_year)),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=END, markeredgecolor=PAPER, markersize=9, label=str(end_year)),
     ]
-    ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=9)
+    ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=10.5, borderpad=0.2, labelspacing=0.7)
 
-    fig.text(0.01, 0.985, f"Air-cooling electricity per dwelling: {start_year} vs {end_year}", ha="left", va="top", fontsize=18, weight="bold", color="#202124")
-    fig.text(0.01, 0.947, f"Complete country histories only; sorted by {end_year} value. Labels show {end_year} value and absolute change.", ha="left", va="top", fontsize=10.5, color="#5f6368")
-    fig.text(0.01, 0.012, f"Metric: {metric}. Source: {SOURCE_LABEL}.", ha="left", va="bottom", fontsize=8.5, color="#5f6368")
+    fig.text(0.04, 0.965, "Air-cooling electricity per dwelling", ha="left", va="top", fontsize=26, weight="bold", color=INK)
+    fig.text(0.04, 0.922, f"{start_year} → {end_year} · {unit}", ha="left", va="top", fontsize=13.5, color=MUTED)
+    fig.text(0.04, 0.035, f"Labels show {end_year} value and Δ since {start_year}. Complete {start_year}–{end_year} histories only. Source: {SOURCE_LABEL}.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
 
     save_figure(fig, "air_cooling_change_dumbbell")
 
@@ -161,6 +209,20 @@ def read_gisco() -> gpd.GeoDataFrame:
     return gpd.read_file(GISCO_URL)
 
 
+def legend_row(fig: plt.Figure, unit: str, year: int) -> None:
+    ax = fig.add_axes([0.18, 0.075, 0.64, 0.06])
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    ax.text(0.0, 0.68, f"{unit}, {year}", ha="left", va="center", fontsize=10.8, weight="semibold", color=INK)
+    items = [(LAND, "No data"), *zip(MAP_COLORS, MAP_LABELS)]
+    x = 0.0
+    for color, label in items:
+        ax.add_patch(Rectangle((x, 0.18), 0.035, 0.22, facecolor=color, edgecolor=BORDER, linewidth=0.8))
+        ax.text(x + 0.044, 0.29, label, ha="left", va="center", fontsize=9.5, color=INK)
+        x += 0.135 if label != "No data" else 0.17
+
+
 def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
     snapshot = latest_snapshot(frame, year)
     world = read_gisco()
@@ -173,38 +235,36 @@ def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
     data["bucket"] = data["value"].map(map_bucket)
     data["color"] = data["bucket"].map(dict(zip(MAP_LABELS, MAP_COLORS)))
 
-    fig, ax = plt.subplots(figsize=(10.8, 9.2))
+    fig = plt.figure(figsize=(11.4, 9.4))
+    ax = fig.add_axes([0.04, 0.15, 0.92, 0.70])
 
-    world.plot(ax=ax, color="#f1f3f4", edgecolor="white", linewidth=0.35)
-    data.plot(ax=ax, color=data["color"], edgecolor="white", linewidth=0.55)
+    world.plot(ax=ax, color=LAND, edgecolor=BORDER, linewidth=0.34)
+    data.plot(ax=ax, color=data["color"], edgecolor=BORDER, linewidth=0.72)
 
     top = data.sort_values("value", ascending=False).head(5).copy()
     points = top.geometry.representative_point()
     label_offsets = {
-        "Cyprus": (110_000, -35_000),
-        "Malta": (0, -95_000),
-        "Greece": (40_000, -35_000),
-        "Croatia": (45_000, 55_000),
-        "Italy": (-40_000, 20_000),
+        "Cyprus": (-12_000, -52_000),
+        "Malta": (0, -92_000),
+        "Greece": (25_000, -34_000),
+        "Croatia": (40_000, 56_000),
+        "Italy": (-38_000, 22_000),
     }
 
     for row, point in zip(top.itertuples(index=False), points):
         dx, dy = label_offsets.get(row.country, (0, 0))
-        text = ax.text(point.x + dx, point.y + dy, row.country, fontsize=8.5, ha="center", va="center", color="#202124", weight="bold", zorder=5)
-        text.set_path_effects([path_effects.withStroke(linewidth=2.8, foreground="white")])
-
-    handles = [Patch(facecolor="#f1f3f4", edgecolor="white", label="No data")]
-    handles.extend(Patch(facecolor=color, edgecolor="white", label=label) for color, label in zip(MAP_COLORS, MAP_LABELS))
-    ax.legend(handles=handles, title=f"{unit}, {year}", loc="lower left", frameon=False, fontsize=8.5, title_fontsize=9.5)
+        text = ax.text(point.x + dx, point.y + dy, row.country, fontsize=9.2, ha="center", va="center", color=INK, weight="bold", zorder=5)
+        text.set_path_effects([path_effects.withStroke(linewidth=3.0, foreground=PAPER)])
 
     ax.set_xlim(MAP_EXTENT[0], MAP_EXTENT[1])
     ax.set_ylim(MAP_EXTENT[2], MAP_EXTENT[3])
     ax.set_aspect("equal")
     ax.axis("off")
 
-    fig.text(0.01, 0.985, f"Air-cooling electricity per dwelling, {year}", ha="left", va="top", fontsize=18, weight="bold", color="#202124")
-    fig.text(0.01, 0.947, "Latest year in the workbook; grey countries have no numeric source value.", ha="left", va="top", fontsize=10.5, color="#5f6368")
-    fig.text(0.01, 0.012, f"Metric: {metric}. Source: {SOURCE_LABEL}; Eurostat GISCO boundaries, EPSG:3035.", ha="left", va="bottom", fontsize=8.5, color="#5f6368")
+    legend_row(fig, unit, year)
+    fig.text(0.04, 0.965, "Air-cooling electricity per dwelling", ha="left", va="top", fontsize=26, weight="bold", color=INK)
+    fig.text(0.04, 0.922, f"{year} snapshot · {unit}", ha="left", va="top", fontsize=13.5, color=MUTED)
+    fig.text(0.04, 0.035, f"Source: {SOURCE_LABEL}; Eurostat GISCO boundaries, EPSG:3035.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
 
     save_figure(fig, "air_cooling_2024_map")
     return len(missing_geometry)
