@@ -22,7 +22,7 @@ python scripts/build_figures.py
 
 The source workbook is `Enerdata_Odyssee_260702_122358.xlsx`. Values marked `n.a.` are treated as missing and numeric zeroes are kept.
 
-The dumbbell plot uses countries with complete annual data from 2010 through 2024. Each row shows the 2010 value, the 2024 value, and the absolute change, sorted by the 2024 value.
+The dumbbell plot uses countries with complete annual data from 2010 through 2024 and nonzero 2024 values. Each row shows the 2010 value, the 2024 value, and the absolute change, sorted by the 2024 value.
 
 The map uses every country with a numeric 2024 value in the workbook. Country boundaries are Eurostat GISCO 2024 regions in EPSG:3035.
 

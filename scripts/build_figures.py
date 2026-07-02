@@ -109,7 +109,7 @@ def complete_history(frame: pd.DataFrame, years: list[int]) -> pd.DataFrame:
     data["start"] = data[start_year]
     data["end"] = data[end_year]
     data["change"] = data["end"] - data["start"]
-    return data.sort_values("end", ascending=False)
+    return data.loc[data["end"].gt(0)].sort_values("end", ascending=False)
 
 
 def latest_snapshot(frame: pd.DataFrame, year: int) -> pd.DataFrame:
@@ -189,7 +189,7 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], metric: str, uni
 
     fig.text(0.04, 0.965, "Air-cooling electricity per dwelling", ha="left", va="top", fontsize=26, weight="bold", color=INK)
     fig.text(0.04, 0.922, f"{start_year} → {end_year} · {unit}", ha="left", va="top", fontsize=13.5, color=MUTED)
-    fig.text(0.04, 0.035, f"Complete {start_year}–{end_year} histories only · Source: {SOURCE_LABEL}.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
+    fig.text(0.04, 0.035, f"Complete {start_year}–{end_year} histories with nonzero {end_year} values · Source: {SOURCE_LABEL}.", ha="left", va="bottom", fontsize=9.3, color=MUTED)
 
     save_figure(fig, "air_cooling_change_dumbbell")
 
@@ -267,7 +267,7 @@ def plot_map(frame: pd.DataFrame, year: int, metric: str, unit: str) -> int:
 # %%
 def main() -> None:
     frame, years, metric, unit = read_workbook(WORKBOOK)
-    graph_count = int(frame[years].notna().all(axis=1).sum())
+    graph_count = int((frame[years].notna().all(axis=1) & frame[years[-1]].gt(0)).sum())
     map_count = int(frame[years[-1]].notna().sum())
 
     plot_dumbbell_change(frame, years, metric, unit)
