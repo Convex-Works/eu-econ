@@ -4,13 +4,43 @@ from __future__ import annotations
 from pathlib import Path
 
 import geopandas as gpd
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import FuncFormatter
+
+from figure_style import (
+    AXIS_LABEL_SIZE,
+    BLUE_PALE,
+    BORDER,
+    CHART_SIZE,
+    CONNECTOR,
+    CONNECTOR_WIDTH,
+    END,
+    GREY_045,
+    GREY_060,
+    GREY_080,
+    GREY_100,
+    INK,
+    LABEL_SIZE,
+    LAND,
+    MAP_SIZE,
+    MUTED,
+    NOTE_SIZE,
+    PAPER,
+    SEQUENTIAL_GREYS,
+    START,
+    START_EDGE,
+    TENURE_OWNER,
+    TENURE_RENTER,
+    add_header,
+    add_note,
+    apply_theme,
+    save_figure,
+    style_axis,
+)
 
 # %%
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,38 +50,7 @@ BARRIER3_CSV = ROOT / "barrier3_building_age.csv"
 FIGURES = ROOT / "figures"
 GISCO_URL = "https://gisco-services.ec.europa.eu/distribution/v2/countries/geojson/CNTR_RG_10M_2024_3035.geojson"
 SOURCE_LABEL = "ODYSSEE/Enerdata export, 2026-07-02"
-SVG_METADATA = {"Date": "2026-07-02"}
 MAP_EXTENT = (2_420_000, 6_780_000, 1_420_000, 5_360_000)
-
-INK = "#111111"
-MUTED = "#666666"
-GRID = "#e4e4e4"
-PAPER = "#ffffff"
-LAND = "#f0f0f0"
-BORDER = "#ffffff"
-START = "#ffffff"
-START_EDGE = "#9a9a9a"
-END = "#111111"
-CONNECTOR = "#b8b8b8"
-BASELINE = "#d8d2c8"
-TENURE_OWNER = "#111111"
-TENURE_RENTER = "#d8d8d8"
-
-CHART_SIZE = (11.8, 8.6)
-MAP_SIZE = (9.8, 9.8)
-TITLE_X = 0.055
-TITLE_Y = 0.94
-SUBTITLE_Y = 0.895
-NOTE_Y = 0.055
-TITLE_SIZE = 24
-SUBTITLE_SIZE = 13
-NOTE_SIZE = 9.3
-TICK_SIZE = 10.4
-LABEL_SIZE = 10.3
-AXIS_LABEL_SIZE = 11.2
-GRID_WIDTH = 0.85
-BASELINE_WIDTH = 1.15
-CONNECTOR_WIDTH = 1.45
 DUMBBELL_AX = [0.17, 0.17, 0.77, 0.66]
 BARRIER_BAR_AX = [0.18, 0.16, 0.72, 0.66]
 BARRIER_SPLIT_AX = [0.19, 0.17, 0.72, 0.64]
@@ -60,12 +59,12 @@ MAP_NOTE_AX = [0.10, 0.065, 0.82, 0.095]
 
 BARRIER_CONTEXT_COUNTRIES = {"Switzerland", "Denmark", "Sweden"}
 AGE_BUCKETS = [
-    ("before_1919", "Before 1919", "#111111"),
-    ("y1919_1945", "1919–1945", "#4d4d4d"),
-    ("y1946_1960", "1946–1960", "#858585"),
-    ("y1961_1980", "1961–1980", "#b5b5b5"),
+    ("before_1919", "Before 1919", GREY_100),
+    ("y1919_1945", "1919–1945", GREY_080),
+    ("y1946_1960", "1946–1960", GREY_060),
+    ("y1961_1980", "1961–1980", GREY_045),
 ]
-AGE_NEW_COLOR = "#d8e4ec"
+AGE_NEW_COLOR = BLUE_PALE
 
 COUNTRY_CODES = {
     "Austria": "AT",
@@ -99,7 +98,7 @@ COUNTRY_CODES = {
 
 MAP_BINS = [-0.1, 1, 50, 150, 400, 800, np.inf]
 MAP_LABELS = ["0", "1–50", "50–150", "150–400", "400–800", "800+"]
-MAP_COLORS = ["#e8e8e8", "#d4d4d4", "#b5b5b5", "#858585", "#4d4d4d", "#111111"]
+MAP_COLORS = SEQUENTIAL_GREYS
 MAP_CONTEXT_CODES = {
     "AD",
     "AL",
@@ -120,28 +119,6 @@ MAP_CONTEXT_CODES = {
     "XK",
     *COUNTRY_CODES.values(),
 }
-
-# %%
-def apply_theme() -> None:
-    mpl.rcParams.update(
-        {
-            "figure.facecolor": PAPER,
-            "axes.facecolor": PAPER,
-            "savefig.facecolor": PAPER,
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Inter", "Helvetica Neue", "Arial", "DejaVu Sans"],
-            "axes.titleweight": "bold",
-            "axes.labelcolor": INK,
-            "xtick.color": INK,
-            "ytick.color": INK,
-            "text.color": INK,
-            "svg.fonttype": "none",
-            "svg.hashsalt": "convex-eu-econ",
-            "pdf.fonttype": 42,
-            "ps.fonttype": 42,
-        }
-    )
-
 
 apply_theme()
 
@@ -214,38 +191,6 @@ def percent_axis(value: float, position: int) -> str:
 def percent_label(value: float) -> str:
     return f"{value:.1f}%"
 
-
-def clean_svg(path: Path) -> None:
-    path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines()) + "\n")
-
-
-def add_header(fig: plt.Figure, title: str, subtitle: str) -> None:
-    fig.text(TITLE_X, TITLE_Y, title, ha="left", va="top", fontsize=TITLE_SIZE, weight="bold", color=INK)
-    fig.text(TITLE_X, SUBTITLE_Y, subtitle, ha="left", va="top", fontsize=SUBTITLE_SIZE, color=MUTED)
-
-
-def add_note(fig: plt.Figure, text: str) -> None:
-    fig.text(TITLE_X, NOTE_Y, text, ha="left", va="bottom", fontsize=NOTE_SIZE, color=MUTED)
-
-
-def style_axis(ax: plt.Axes, grid_axis: str) -> None:
-    ax.grid(axis=grid_axis, color=GRID, linewidth=GRID_WIDTH)
-    ax.set_axisbelow(True)
-    ax.spines[["top", "right", "left"]].set_visible(False)
-    ax.spines["bottom"].set_color(BASELINE)
-    ax.spines["bottom"].set_linewidth(BASELINE_WIDTH)
-    ax.tick_params(axis="x", labelsize=TICK_SIZE, pad=6)
-    ax.tick_params(axis="y", labelsize=TICK_SIZE, length=0, pad=6)
-
-
-def save_figure(fig: plt.Figure, stem: str) -> None:
-    FIGURES.mkdir(exist_ok=True)
-    svg_path = FIGURES / f"{stem}.svg"
-    fig.savefig(FIGURES / f"{stem}.png", dpi=300)
-    fig.savefig(svg_path, metadata=SVG_METADATA)
-    clean_svg(svg_path)
-    plt.close(fig)
-
 # %%
 def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], unit: str) -> None:
     start_year = years[0]
@@ -283,10 +228,10 @@ def plot_dumbbell_change(frame: pd.DataFrame, years: list[int], unit: str) -> No
     ]
     ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=10.5, borderpad=0.2, labelspacing=0.7)
 
-    add_header(fig, "Air-cooling electricity per dwelling", f"{start_year} → {end_year} · {unit}")
-    add_note(fig, f"Complete {start_year}–{end_year} histories with nonzero {end_year} values · Source: {SOURCE_LABEL}.")
+    add_header(fig, "Air-conditioning electricity use by country", f"Electricity per dwelling for air cooling · {start_year} and {end_year} · {unit} · complete country histories")
+    add_note(fig, f"Includes countries with complete {start_year}–{end_year} histories and nonzero {end_year} values · Source: {SOURCE_LABEL}.")
 
-    save_figure(fig, "air_cooling_change_dumbbell")
+    save_figure(fig, FIGURES, "air_cooling_change_dumbbell")
 
 # %%
 def map_bucket(value: float) -> str:
@@ -339,9 +284,9 @@ def plot_map(frame: pd.DataFrame, year: int, unit: str) -> int:
     ax.axis("off")
 
     map_note(fig, unit, year)
-    add_header(fig, "Air-cooling electricity per dwelling", f"{year} snapshot · {unit}")
+    add_header(fig, "Air-conditioning electricity use across Europe", f"Electricity per dwelling for air cooling · {year} · {unit}")
 
-    save_figure(fig, "air_cooling_2024_map")
+    save_figure(fig, FIGURES, "air_cooling_2024_map")
     return len(missing_geometry)
 
 # %%
@@ -384,10 +329,10 @@ def plot_barrier_owner_tenure(frame: pd.DataFrame, countries: set[str], source: 
     ]
     fig.legend(handles=handles, loc="upper right", bbox_to_anchor=(0.91, 0.872), frameon=False, ncol=2, fontsize=9.8, handlelength=1.6, columnspacing=1.0)
 
-    add_header(fig, "Barrier 1: owner-occupied tenure", "Owner vs renter population share · latest Eurostat year · selected countries")
-    add_note(fig, f"Tenure split is population share; sorted by owner share · Source: {source}.")
+    add_header(fig, "Owner and renter tenure by country", "Population share · latest Eurostat year · selected countries")
+    add_note(fig, f"Owner share is computed as 100 minus renter share; sorted by owner share · Source: {source}.")
 
-    save_figure(fig, "barrier1_owner_tenure")
+    save_figure(fig, FIGURES, "barrier1_owner_tenure")
     return len(data)
 
 
@@ -435,10 +380,10 @@ def plot_barrier_building_age(frame: pd.DataFrame, countries: set[str], source: 
 
     fig.legend(loc="upper right", bbox_to_anchor=(0.91, 0.872), frameon=False, ncol=5, fontsize=9.2, handlelength=1.5, columnspacing=0.9)
 
-    add_header(fig, "Barrier 3: the 1980 building-stock split", "Conventional dwellings by construction period · 2021 Census · selected countries")
+    add_header(fig, "Dwelling stock age by country", "Conventional dwellings by construction period · 2021 Census · selected countries")
     add_note(fig, f"Left: pre-1980; right: 1981+; sorted by 1981+ share; rows sum to 100% · Source: {source}.")
 
-    save_figure(fig, "barrier3_building_age_split")
+    save_figure(fig, FIGURES, "barrier3_building_age_split")
     return len(data)
 
 

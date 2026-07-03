@@ -11,26 +11,17 @@ pip install -r requirements.txt
 python scripts/build_figures.py
 ```
 
-## Outputs
-
-- `figures/air_cooling_change_dumbbell.png`
-- `figures/air_cooling_change_dumbbell.svg`
-- `figures/air_cooling_2024_map.png`
-- `figures/air_cooling_2024_map.svg`
-- `figures/barrier1_owner_tenure.png`
-- `figures/barrier1_owner_tenure.svg`
-- `figures/barrier3_building_age_split.png`
-- `figures/barrier3_building_age_split.svg`
-
 ## Method
 
 The air-cooling electricity source workbook is `Enerdata_Odyssee_260702_122358.xlsx`. Values marked `n.a.` are treated as missing and numeric zeroes are kept.
 
-The dumbbell plot uses countries with complete annual data from 2010 through 2024 and nonzero 2024 values. Each row shows the 2010 value, the 2024 value, and the absolute change, sorted by the 2024 value.
+Shared figure styling is defined in `scripts/figure_style.py`. Chart-specific layout choices remain in `scripts/build_figures.py`.
+
+The 2010/2024 country comparison uses countries with complete annual data from 2010 through 2024 and nonzero 2024 values. Each row shows the 2010 value, the 2024 value, and the absolute change, sorted by the 2024 value.
 
 The map uses every country with a numeric 2024 value in the workbook. Country boundaries are Eurostat GISCO 2024 regions in EPSG:3035.
 
-The barrier figures use `barrier1_tenant_landlord.csv` and `barrier3_building_age.csv`. They cover the complete-history dumbbell countries plus Switzerland, Denmark, and Sweden. The owner-tenure chart shows a two-part population split: owner and renter. The building-age chart splits known construction-year dwellings into pre-1980 and 1981+ stock.
+The tenure and building-stock figures use `barrier1_tenant_landlord.csv` and `barrier3_building_age.csv`. They cover the complete-history comparison countries plus Switzerland, Denmark, and Sweden. The tenure figure shows a two-part population split: owner and renter. The building-age figure splits known construction-year dwellings into pre-1980 and 1981+ stock.
 
 ## Sources
 

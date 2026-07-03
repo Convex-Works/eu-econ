@@ -549,13 +549,13 @@ z
    </g>
   </g>
   <g id="text_47">
-   <text style="font-weight: 700; font-size: 24px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans', sans-serif; text-anchor: start; fill: #111111" x="46.728" y="60.402" transform="rotate(-0 46.728 60.402)">Air-cooling electricity per dwelling</text>
+   <text style="font-weight: 700; font-size: 24px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans', sans-serif; text-anchor: start; fill: #111111" x="46.728" y="60.402" transform="rotate(-0 46.728 60.402)">Air-conditioning electricity use by country</text>
   </g>
   <g id="text_48">
-   <text style="font-size: 13px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans', sans-serif; text-anchor: start; fill: #666666" x="46.728" y="77.60975" transform="rotate(-0 46.728 77.60975)">2010 → 2024 · kWh/dw</text>
+   <text style="font-size: 13px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans', sans-serif; text-anchor: start; fill: #666666" x="46.728" y="77.60975" transform="rotate(-0 46.728 77.60975)">Electricity per dwelling for air cooling · 2010 and 2024 · kWh/dw · complete country histories</text>
   </g>
   <g id="text_49">
-   <text style="font-size: 9.3px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans', sans-serif; text-anchor: start; fill: #666666" x="46.728" y="582.898261" transform="rotate(-0 46.728 582.898261)">Complete 2010–2024 histories with nonzero 2024 values · Source: ODYSSEE/Enerdata export, 2026-07-02.</text>
+   <text style="font-size: 9.3px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans', sans-serif; text-anchor: start; fill: #666666" x="46.728" y="582.898261" transform="rotate(-0 46.728 582.898261)">Includes countries with complete 2010–2024 histories and nonzero 2024 values · Source: ODYSSEE/Enerdata export, 2026-07-02.</text>
   </g>
  </g>
  <defs>
